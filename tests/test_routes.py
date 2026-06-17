@@ -1,13 +1,5 @@
-import pytest
 import json
-from app import create_app
-
-@pytest.fixture
-def client():
-    app = create_app()
-    app.config['TESTING'] = True
-    with app.test_client() as client:
-        yield client
+import pytest
 
 def test_get_orders_empty(client):
     """Sprawdza czy lista zleceń jest pusta na starcie"""
@@ -34,6 +26,7 @@ def test_create_order(client):
     assert data['status'] == 'nowe'
     assert 'id' in data
     assert 'created_at' in data
+    assert 'deadline' in data
 
 def test_create_order_without_title(client):
     """Sprawdza czy API zwraca błąd gdy brakuje tytułu"""
@@ -87,3 +80,14 @@ def test_delete_order(client):
     # Sprawdzamy czy zniknęło
     response = client.get(f'/api/orders/{order_id}')
     assert response.status_code == 404
+
+def test_search_orders(client):
+    """Test wyszukiwania (nowa funkcjonalność!)"""
+    # Tworzymy dwa zlecenia
+    client.post('/api/orders', json={'title': 'Książka A'})
+    client.post('/api/orders', json={'title': 'Książka B'})
+    
+    response = client.get('/api/orders')
+    data = json.loads(response.data)
+    
+    assert len(data) == 2

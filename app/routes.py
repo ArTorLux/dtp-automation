@@ -1,16 +1,20 @@
 from flask import Blueprint, request, jsonify
+from app.models import Order
+from app import db
 from datetime import datetime
 import uuid
 
 api = Blueprint('api', __name__)
 
-# Nasza "pamięć" - jak notatnik na biurku
-orders = []
+@api.route("/")    
+def root():
+    return {"DTP-automation": "Gotowe"}   
 
 @api.route('/orders', methods=['GET'])
 def get_orders():
     """Pobiera wszystkie zlecenia"""
-    return jsonify(orders)
+    orders = Order.query.all()
+    return jsonify([order.to_dict() for order in orders])
 
 @api.route('/orders', methods=['POST'])
 def create_order():
@@ -19,51 +23,55 @@ def create_order():
     
     if not data or 'title' not in data:
         return jsonify({'error': 'Brakuje tytułu'}), 400
+
+    order = Order.from_dict(data)
     
-    order = {
-        'id': str(uuid.uuid4())[:8],
-        'title': data['title'],
-        'description': data.get('description', ''),
-        'status': 'nowe',
-        'created_at': datetime.now().isoformat(),
-        'deadline': data.get('deadline')
-    }
+    db.session.add(order)
+    db.session.commit()
     
-    orders.append(order)
-    return jsonify(order), 201
+    return jsonify(order.to_dict()), 201
 
 @api.route('/orders/<order_id>', methods=['GET'])
 def get_order(order_id):
     """Pobiera konkretne zlecenie"""
-    order = next((o for o in orders if o['id'] == order_id), None)
+    order = Order.query.get(order_id)
     
     if not order:
         return jsonify({'error': 'Zlecenie nie znalezione'}), 404
     
-    return jsonify(order)
+    return jsonify(order.to_dict())
 
 @api.route('/orders/<order_id>', methods=['PUT'])
 def update_order(order_id):
     """Aktualizuje status zlecenia"""
-    order = next((o for o in orders if o['id'] == order_id), None)
+    order = Order.query.get(order_id)
     
     if not order:
         return jsonify({'error': 'Zlecenie nie znalezione'}), 404
     
     data = request.get_json()
-    if 'status' in data:
-        order['status'] = data['status']
     
-    return jsonify(order)
+    if 'status' in data:
+        order.status = data['status']
+    
+    if 'title' in data:
+        order.title = data['title']
+    
+    if 'description' in data:
+        order.description = data['description']
+    
+    db.session.commit()
+    return jsonify(order.to_dict())
 
 @api.route('/orders/<order_id>', methods=['DELETE'])
 def delete_order(order_id):
     """Usuwa zlecenie"""
-    global orders
-    order = next((o for o in orders if o['id'] == order_id), None)
+    order = Order.query.get(order_id)
     
     if not order:
         return jsonify({'error': 'Zlecenie nie znalezione'}), 404
     
-    orders = [o for o in orders if o['id'] != order_id]
+    db.session.delete(order)
+    db.session.commit()
+    
     return jsonify({'message': 'Zlecenie usunięte'})
